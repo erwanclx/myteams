@@ -89,9 +89,6 @@ int main(int argc, char *argv[])
     socketToConnect = createSocket(args.targetIP, args.targetPORT);
 
     sendMessage(socketToConnect, args.message);
-    sendMessage(socketToConnect, args.message);
-    sendMessage(socketToConnect, args.message);
-    sendMessage(socketToConnect, args.message);
 
     // pause();
 };
