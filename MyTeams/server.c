@@ -96,7 +96,7 @@ void get_ip_address(int socket)
 {
     struct sockaddr_in addr;
     socklen_t addr_size = sizeof(struct sockaddr_in);
-    int res = getpeername(socket, (struct sockaddr *)&addr, &addr_size);
+    getpeername(socket, (struct sockaddr *)&addr, &addr_size);
     char *clientip = inet_ntoa(addr.sin_addr);
     int clientport = ntohs(addr.sin_port);
     printf("Received from => %s:%d\n", clientip, clientport);
@@ -107,7 +107,6 @@ void read_data_from_socket(int socket, fd_set *all_sockets, int fd_max, int serv
     char buffer[BUFSIZ];
     char msg_to_send[BUFSIZ];
     int bytes_read;
-    int status;
     memset(&buffer, '\0', sizeof buffer);
     bytes_read = recv(socket, buffer, BUFSIZ, 0);
     if (bytes_read <= 0)
