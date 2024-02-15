@@ -2,17 +2,15 @@ name: MyTeams Make CI
 
 on:
   push:
-    branches: [ "dev" ]
+    branches: ["erwan"]
   pull_request:
-    branches: [ "dev" ]
+    branches: ["erwan"]
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
-    - name: make
-      working-directory: ./MyTeams
-      run: make
+      - uses: actions/checkout@v3
+      - name: make
+        run: make

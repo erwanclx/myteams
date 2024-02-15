@@ -3,13 +3,3 @@ server.o
 client
 client.o
 .vscode
-
-/MyTeams/server.o
-/MyTeams/client.o
-
-/MyTeams/server
-/MyTeams/client
-
-/MyTeams/a.out
-
-/MyTeams/.vscode
