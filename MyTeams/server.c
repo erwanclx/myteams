@@ -8,10 +8,77 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#define USERNAME_SIZE 20
+#define MAX_CLIENTS 50
 
 // int create_server_socket(int targetPORT);
 // void accept_new_connection(int listener_socket, fd_set *all_sockets, int *fd_max);
 // void read_data_from_socket(int socket, fd_set *all_sockets, int fd_max, int server_socket);
+
+typedef struct
+{
+    int socket;
+    char username[USERNAME_SIZE];
+    int messages_sent;
+
+} ClientInfo;
+
+ClientInfo clients[MAX_CLIENTS];
+
+int is_client_registered(int client_socket)
+{
+    for (int i = 0; i < MAX_CLIENTS; i++)
+    {
+        if (clients[i].socket == client_socket)
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+void register_client(int client_socket, char *username)
+{
+    for (int i = 0; i < MAX_CLIENTS; i++)
+    {
+        if (clients[i].socket == 0)
+        {
+            clients[i].socket = client_socket;
+            strcpy(clients[i].username, username);
+            clients[i].messages_sent = 1;
+            printf("[DEBUG] Client %d registered as %s with %d messages\n", clients[i].messages_sent, clients[i].username, clients[i].messages_sent);
+            break;
+        }
+    }
+}
+
+void unregister_client(int client_socket)
+{
+    for (int i = 0; i < MAX_CLIENTS; i++)
+    {
+        if (clients[i].socket == client_socket)
+        {
+            clients[i].socket = 0;
+            memset(clients[i].username, 0, sizeof(clients[i].username));
+            break;
+        }
+    }
+}
+
+char *get_username(int client_socket, char *username)
+{
+    // clients[client_socket].messages_sent++;
+    // printf("[DEBUG] Client %d has %d messages, his username is \n", client_socket, clients[client_socket].messages_sent, clients[client_socket].username);
+    // return clients[client_socket].username;
+    for (int i = 0; i < MAX_CLIENTS; i++)
+    {
+        if (clients[i].socket == client_socket)
+        {
+            return clients[i].username;
+        }
+    }
+    return "Unknown";
+}
 
 void banner(int targetPORT)
 {
@@ -72,7 +139,7 @@ void accept_new_connection(int server_socket, fd_set *all_sockets, int *fd_max)
 
     printf("$ Accepted new connection on client socket %d.\n", client_fd);
     memset(&msg_to_send, '\0', sizeof msg_to_send);
-    sprintf(msg_to_send, "$ Welcome. You are client [%d]\n", client_fd);
+    sprintf(msg_to_send, "$ Welcome. You are client [%d]\nEnter message:\n", client_fd);
     status = send(client_fd, msg_to_send, strlen(msg_to_send), 0);
     if (status == -1)
         printf("\033[1;31m$ Send error to client %d: %s \033[0m \n", client_fd, strerror(errno));
@@ -81,11 +148,21 @@ void accept_new_connection(int server_socket, fd_set *all_sockets, int *fd_max)
 void send_to_all_clients(fd_set *all_sockets, int server_socket, int sender, char *msg)
 {
     int status;
+
     for (int i = 0; i <= FD_SETSIZE; i++)
     {
         if (FD_ISSET(i, all_sockets) && i != server_socket && i != sender)
         {
             status = send(i, msg, strlen(msg), 0);
+            if (status == -1)
+                printf("\033[1;31m$ Send error to client %d: %s\n", i, strerror(errno));
+        }
+
+        else if (i == sender)
+        {
+            char sender_msg[BUFSIZ + 8];
+            sprintf(sender_msg, "(You) %s", msg);
+            status = send(i, sender_msg, strlen(msg), 0);
             if (status == -1)
                 printf("\033[1;31m$ Send error to client %d: %s\n", i, strerror(errno));
         }
@@ -121,11 +198,19 @@ void read_data_from_socket(int socket, fd_set *all_sockets, int fd_max, int serv
     else
     {
         printf("[%d] Got message:\n %s\n", socket, buffer);
+
+        if (!is_client_registered(socket))
+        {
+            register_client(socket, buffer);
+            return;
+        }
+
         get_ip_address(socket);
         memset(&msg_to_send, '\0', sizeof msg_to_send);
-        // sprintf(msg_to_send, "Client %d: %s", socket, buffer);
-        // snprintf(msg_to_send, sizeof(msg_to_send) + 10, "Client %d: %s", socket, buffer);
-        snprintf(msg_to_send, sizeof(msg_to_send) + sizeof(socket) + sizeof(buffer), "Client %d: %s", socket, buffer);
+
+        char *username = get_username(socket, buffer);
+
+        snprintf(msg_to_send, sizeof(msg_to_send) + sizeof(socket) + sizeof(username) + sizeof(buffer), "# %s >> %s", username, buffer);
         send_to_all_clients(all_sockets, server_socket, socket, msg_to_send);
     }
 }
@@ -184,6 +269,14 @@ int main(int argc, char *argv[])
         else if (status == 0)
         {
             printf("$ Waiting...\n");
+            // Print all clients
+            for (int i = 0; i < MAX_CLIENTS; i++)
+            {
+                if (clients[i].socket != 0)
+                {
+                    printf("Client %d: %s\n", clients[i].socket, clients[i].username);
+                }
+            }
             continue;
         }
 
@@ -195,7 +288,6 @@ int main(int argc, char *argv[])
                 i++;
                 continue;
             }
-            // printf("[%d] Ready for I/O operation\n", i);
 
             if (i == server_socket)
                 accept_new_connection(server_socket, &all_sockets, &fd_max);
