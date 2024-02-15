@@ -139,7 +139,7 @@ void accept_new_connection(int server_socket, fd_set *all_sockets, int *fd_max)
 
     printf("$ Accepted new connection on client socket %d.\n", client_fd);
     memset(&msg_to_send, '\0', sizeof msg_to_send);
-    sprintf(msg_to_send, "$ Welcome. You are client [%d]\nEnter message:\n", client_fd);
+    sprintf(msg_to_send, "$ Welcome. You are client [%d]\n", client_fd);
     status = send(client_fd, msg_to_send, strlen(msg_to_send), 0);
     if (status == -1)
         printf("\033[1;31m$ Send error to client %d: %s \033[0m \n", client_fd, strerror(errno));
@@ -194,6 +194,7 @@ void read_data_from_socket(int socket, fd_set *all_sockets, int fd_max, int serv
             printf("[Server] Recv error: %s\n", strerror(errno));
         close(socket);
         FD_CLR(socket, all_sockets);
+        unregister_client(socket);
     }
     else
     {
