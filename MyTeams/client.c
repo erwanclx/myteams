@@ -39,7 +39,12 @@ void destroy_win(WINDOW *local_win)
 char *writeMessage(WINDOW *input_win)
 {
     static char message[1000];
-    mvwgetstr(input_win, 1, 1, message);
+    mvwgetstr(input_win, 2, 1, message);
+    wrefresh(input_win);
+    // Clear the input text but keep the window with the border and Enter message
+    wclear(input_win);
+    box(input_win, 0, 0);
+    mvwprintw(input_win, 1, 1, "Enter message (/help) : ");
     wrefresh(input_win);
     return message;
 }
@@ -127,7 +132,7 @@ int main(int argc, char *argv[])
     // On top of the input window centered
     WINDOW *usernameWindow = create_newwin(1, col, row - 6, 0);
 
-    mvwprintw(inputWindow, 1, 1, "Enter message: ");
+    mvwprintw(inputWindow, 1, 1, "Enter message (/help) : ");
     wrefresh(inputWindow);
 
     fd_set readfds;

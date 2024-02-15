@@ -162,7 +162,7 @@ void send_to_all_clients(fd_set *all_sockets, int server_socket, int sender, cha
         {
             char sender_msg[BUFSIZ + 8];
             sprintf(sender_msg, "(You) %s", msg);
-            status = send(i, sender_msg, strlen(msg), 0);
+            status = send(i, sender_msg, strlen(sender_msg), 0);
             if (status == -1)
                 printf("\033[1;31m$ Send error to client %d: %s\n", i, strerror(errno));
         }
