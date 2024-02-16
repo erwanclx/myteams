@@ -11,10 +11,6 @@
 #define USERNAME_SIZE 20
 #define MAX_CLIENTS 50
 
-// int create_server_socket(int targetPORT);
-// void accept_new_connection(int listener_socket, fd_set *all_sockets, int *fd_max);
-// void read_data_from_socket(int socket, fd_set *all_sockets, int fd_max, int server_socket);
-
 typedef struct
 {
     int socket;
@@ -149,24 +145,72 @@ void send_to_all_clients(fd_set *all_sockets, int server_socket, int sender, cha
 {
     int status;
 
-    for (int i = 0; i <= FD_SETSIZE; i++)
+    printf("DEBUG ---- %s\n", msg);
+
+    if (strcmp(msg, "/list") == 0)
     {
-        if (FD_ISSET(i, all_sockets) && i != server_socket && i != sender)
+        char user_list[BUFSIZ];
+        memset(user_list, 0, BUFSIZ);
+
+        for (int i = 0; i < MAX_CLIENTS; i++)
         {
-            status = send(i, msg, strlen(msg), 0);
-            if (status == -1)
-                printf("\033[1;31m$ Send error to client %d: %s\n", i, strerror(errno));
+            if (clients[i].socket != 0)
+            {
+                strcat(user_list, clients[i].username);
+                strcat(user_list, " | ");
+            }
         }
 
-        else if (i == sender)
+        char final_list[BUFSIZ + 8];
+        snprintf(final_list, sizeof(final_list), "$ %s\n", user_list);
+        status = send(sender, final_list, strlen(final_list), 0);
+    }
+    else
+    {
+        // memset(&msg_to_send, '\0', sizeof msg_to_send);
+
+        // char *username = get_username(socket, msg);
+
+        // snprintf(msg_to_send, sizeof(msg_to_send) + sizeof(socket) + sizeof(username) + sizeof(buffer), "# %s >> %s", username, msg);
+
+        for (int i = 0; i <= FD_SETSIZE; i++)
         {
-            char sender_msg[BUFSIZ + 8];
-            sprintf(sender_msg, "(You) %s", msg);
-            status = send(i, sender_msg, strlen(sender_msg), 0);
-            if (status == -1)
-                printf("\033[1;31m$ Send error to client %d: %s\n", i, strerror(errno));
+            if (FD_ISSET(i, all_sockets) && i != server_socket && i != sender)
+            {
+                status = send(i, msg, strlen(msg), 0);
+                if (status == -1)
+                    printf("\033[1;31m$ Send error to client %d: %s\n", i, strerror(errno));
+            }
+
+            else if (i == sender)
+            {
+                char sender_msg[BUFSIZ + 8];
+                sprintf(sender_msg, "(You) %s", msg);
+                status = send(i, sender_msg, strlen(sender_msg), 0);
+                if (status == -1)
+                    printf("\033[1;31m$ Send error to client %d: %s\n", i, strerror(errno));
+            }
         }
     }
+
+    // for (int i = 0; i <= FD_SETSIZE; i++)
+    // {
+    //     if (FD_ISSET(i, all_sockets) && i != server_socket && i != sender)
+    //     {
+    //         status = send(i, msg, strlen(msg), 0);
+    //         if (status == -1)
+    //             printf("\033[1;31m$ Send error to client %d: %s\n", i, strerror(errno));
+    //     }
+
+    //     else if (i == sender)
+    //     {
+    //         char sender_msg[BUFSIZ + 8];
+    //         sprintf(sender_msg, "(You) %s", msg);
+    //         status = send(i, sender_msg, strlen(sender_msg), 0);
+    //         if (status == -1)
+    //             printf("\033[1;31m$ Send error to client %d: %s\n", i, strerror(errno));
+    //     }
+    // }
 }
 
 void get_ip_address(int socket)
@@ -182,7 +226,7 @@ void get_ip_address(int socket)
 void read_data_from_socket(int socket, fd_set *all_sockets, int fd_max, int server_socket)
 {
     char buffer[BUFSIZ];
-    char msg_to_send[BUFSIZ];
+    // char msg_to_send[BUFSIZ];
     int bytes_read;
     memset(&buffer, '\0', sizeof buffer);
     bytes_read = recv(socket, buffer, BUFSIZ, 0);
@@ -207,12 +251,13 @@ void read_data_from_socket(int socket, fd_set *all_sockets, int fd_max, int serv
         }
 
         get_ip_address(socket);
-        memset(&msg_to_send, '\0', sizeof msg_to_send);
+        // memset(&msg_to_send, '\0', sizeof msg_to_send);
 
-        char *username = get_username(socket, buffer);
+        // char *username = get_username(socket, buffer);
 
-        snprintf(msg_to_send, sizeof(msg_to_send) + sizeof(socket) + sizeof(username) + sizeof(buffer), "# %s >> %s", username, buffer);
-        send_to_all_clients(all_sockets, server_socket, socket, msg_to_send);
+        // snprintf(msg_to_send, sizeof(msg_to_send) + sizeof(socket) + sizeof(username) + sizeof(buffer), "# %s >> %s", username, buffer);
+        // send_to_all_clients(all_sockets, server_socket, socket, msg_to_send);
+        send_to_all_clients(all_sockets, server_socket, socket, buffer);
     }
 }
 

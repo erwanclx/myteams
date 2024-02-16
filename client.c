@@ -18,6 +18,8 @@ struct arguments
 
 int messageCount = 1;
 
+int isIntro = 1;
+
 WINDOW *createWin(int height, int width, int starty, int startx)
 {
     WINDOW *local_win;
@@ -27,6 +29,42 @@ WINDOW *createWin(int height, int width, int starty, int startx)
     wrefresh(local_win);
 
     return local_win;
+}
+
+void displayIntro(WINDOW *intro_win)
+{
+
+    int row, col;
+    getmaxyx(intro_win, row, col);
+    mvwprintw(intro_win, row / 2 - 2, (col - 30) / 2, "Welcome to MyTeams !");
+    mvwprintw(intro_win, row / 2 - 1, (col - 30) / 2, "Type /help to see the list of commands.");
+    mvwprintw(intro_win, row / 2, (col - 30) / 2, "Type /quit to exit the chatroom.");
+    mvwprintw(intro_win, row / 2 + 1, (col - 30) / 2, "Press any key to continue.");
+
+    wrefresh(intro_win);
+
+    // getch();
+}
+
+void displayHelp()
+{
+
+    int row, col;
+    getmaxyx(stdscr, row, col);
+    WINDOW *helpWindow = newwin(5, 50, (row - 5) / 2, (col - 50) / 2);
+    box(helpWindow, 0, 0);
+    wrefresh(helpWindow);
+
+    mvwprintw(helpWindow, 1, 1, "/help : Display the list of commands");
+    mvwprintw(helpWindow, 2, 1, "/quit : Quit the chatroom");
+    mvwprintw(helpWindow, 3, 1, "/list : List all the users in the chatroom");
+    // Any key to leave
+    mvwprintw(helpWindow, 4, 1, "Any key to continue");
+    wrefresh(helpWindow);
+
+    wgetch(helpWindow);
+    wclear(helpWindow);
+    wrefresh(helpWindow);
 }
 
 void clearMessage(WINDOW *input_win)
@@ -57,8 +95,6 @@ void printMessage(WINDOW *chatWindow, char *message)
 {
     int row, col;
     getmaxyx(chatWindow, row, col);
-
-    // printf("Row: %d, Col: %d\n", row, col);
 
     int lines = 0;
     int message_length = strlen(message);
@@ -119,12 +155,23 @@ int createSocket(char *targetIP, int targetPORT)
     return network_socket;
 }
 
-void sendMessage(int network_socket, char *message)
+void sendMessage(int network_socket, char *message, WINDOW *chatWindow)
 {
-    if (send(network_socket, message, strlen(message), 0) < 0)
+    if (strcmp(message, "/help") == 0)
     {
-        printf("Send failed\n");
-        exit(1);
+
+        displayHelp();
+
+        box(chatWindow, 0, 0);
+        wrefresh(chatWindow);
+    }
+    else
+    {
+        if (send(network_socket, message, strlen(message), 0) < 0)
+        {
+            printf("Send failed\n");
+            exit(1);
+        }
     }
 }
 
@@ -167,7 +214,9 @@ int main(int argc, char *argv[])
     WINDOW *inputWindow = createWin(5, col, row - 5, 0);
     WINDOW *usernameWindow = createWin(1, col, row - 6, 0);
 
-    mvwprintw(inputWindow, 1, 1, "Enter message (/help) : ");
+    displayIntro(chatWindow);
+
+    // mvwprintw(inputWindow, 1, 1, "Enter message (/help) : ");
     wrefresh(inputWindow);
 
     fd_set readfds;
@@ -183,6 +232,13 @@ int main(int argc, char *argv[])
 
     mvwprintw(usernameWindow, 0, 1, "Username: %s", args.username);
     wrefresh(usernameWindow);
+
+    // pause();
+    wgetch(chatWindow);
+    wclear(chatWindow);
+    box(chatWindow, 0, 0);
+    mvwprintw(inputWindow, 1, 1, "Enter message (/help) : ");
+    wrefresh(inputWindow);
 
     while (1)
     {
@@ -222,7 +278,7 @@ int main(int argc, char *argv[])
         if (FD_ISSET(STDIN_FILENO, &tmpfds))
         {
             char *message = writeMessage(inputWindow);
-            sendMessage(socketToConnect, message);
+            sendMessage(socketToConnect, message, chatWindow);
             wrefresh(inputWindow);
         }
     }
