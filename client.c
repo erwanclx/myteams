@@ -46,6 +46,49 @@ char *writeMessage(WINDOW *input_win)
     return message;
 }
 
+// void printMessage(WINDOW *chat_win, char *message)
+// {
+//     mvwprintw(chat_win, messageCount, 1, message);
+//     wrefresh(chat_win);
+//     messageCount++;
+// }
+
+void printMessage(WINDOW *chatWindow, char *message)
+{
+    int row, col;
+    getmaxyx(chatWindow, row, col);
+
+    // printf("Row: %d, Col: %d\n", row, col);
+
+    int lines = 0;
+    int message_length = strlen(message);
+    int message_index = 0;
+
+    while (message_index < message_length)
+    {
+        int remaining_space = col - 1;
+        while (remaining_space > 0 && message[message_index] != '\0')
+        {
+            message_index++;
+            remaining_space--;
+        }
+        lines++;
+    }
+
+    if (messageCount + lines > row - 1)
+    {
+        scroll(chatWindow);
+        wclear(chatWindow);
+        box(chatWindow, 0, 0);
+        messageCount = 1;
+    }
+
+    mvwprintw(chatWindow, messageCount, 1, "%s", message);
+    wrefresh(chatWindow);
+
+    messageCount += lines;
+}
+
 int createSocket(char *targetIP, int targetPORT)
 {
     int network_socket;
@@ -172,9 +215,7 @@ int main(int argc, char *argv[])
             else
             {
                 buffer[bytes_read] = '\0';
-                mvwprintw(chatWindow, messageCount, 1, "%s", buffer);
-                wrefresh(chatWindow);
-                messageCount += 1;
+                printMessage(chatWindow, buffer);
             }
         }
 
