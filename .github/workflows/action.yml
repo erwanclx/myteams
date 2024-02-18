@@ -12,5 +12,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+      - name: Install dependencies
+        run: sudo apt-get install -y libncurses5-dev libncursesw5-dev libcurl4
       - name: make
         run: make
