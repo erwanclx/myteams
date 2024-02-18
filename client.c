@@ -8,6 +8,7 @@
 #include <sys/select.h>
 #include <errno.h>
 #include <ncurses.h>
+#include <curl/curl.h>
 
 struct arguments
 {
@@ -19,6 +20,112 @@ struct arguments
 int messageCount = 1;
 
 int isIntro = 1;
+
+void callbackAuth(char *response)
+{
+
+    char *token = strtok(response, ":");
+    char *count = strtok(NULL, ",");
+
+    int isAuthentified = atoi(count);
+    if (isAuthentified == 0 || !isAuthentified)
+    {
+        endwin();
+        printf("\033[1;31m");
+        printf("$ Authentification failed, please check your username and password.\n");
+        printf("\033[0m");
+        exit(1);
+    }
+    else
+    {
+        printf("\033[1;32m");
+        printf("$ Authentification success\n");
+        printf("\033[0m");
+        sleep(1);
+        endwin();
+        initscr();
+    }
+}
+
+char write_data(void *buffer, size_t size, size_t nmemb, void *userp)
+{
+    callbackAuth((char *)buffer);
+
+    return size * nmemb;
+}
+
+int authRequest(char *username, char *password)
+{
+
+    CURL *curl;
+    CURLcode res;
+
+    curl_global_init(CURL_GLOBAL_ALL);
+
+    curl = curl_easy_init();
+    if (curl)
+    {
+        struct curl_slist *headers = NULL;
+        headers = curl_slist_append(headers, "Authorization: Token q24qiZP0hexG2wlzkx3hl9THnS6MF6RD");
+
+        const char *basis_url = "https://api.baserow.io/api/database/rows/table/256115/?user_field_names=true&filters=";
+        char json_data[200];
+
+        snprintf(json_data, sizeof(json_data), "{\"filter_type\":\"AND\",\"filters\":[{\"type\":\"equal\",\"field\":\"Username\",\"value\":\"%s\"},{\"type\":\"equal\",\"field\":\"Password\",\"value\":\"%s\"}],\"groups\":[]}", username, password);
+        char *url = malloc(strlen(basis_url) + strlen(json_data) + 1);
+        strcpy(url, basis_url);
+        strcat(url, json_data);
+
+        curl_easy_setopt(curl, CURLOPT_URL, url);
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_data);
+
+        res = curl_easy_perform(curl);
+        if (res != CURLE_OK)
+        {
+            fprintf(stderr, "curl_easy_perform() failed: %s\n",
+                    curl_easy_strerror(res));
+            endwin();
+            printf("\033[1;31m");
+            printf("$ Authentification failed, error in the request. Insure you only give valid characters.\n");
+            printf("\033[0m");
+            exit(1);
+        }
+
+        curl_slist_free_all(headers);
+        curl_easy_cleanup(curl);
+    }
+}
+
+int baserowAuthentication(int row, int col, char *username)
+{
+    printf("\033[1;32m");
+    printf("\033[0m");
+    WINDOW *auth_win;
+    auth_win = newwin(10, 40, (row - 10) / 2, (col - 40) / 2);
+    box(auth_win, 0, 0);
+    wrefresh(auth_win);
+    mvwprintw(auth_win, 1, 1, "Enter your password : ");
+    wrefresh(auth_win);
+    char password[20];
+    mvwgetstr(auth_win, 2, 1, password);
+    wrefresh(auth_win);
+    wclear(auth_win);
+    wrefresh(auth_win);
+
+    if (strlen(password) == 0)
+    {
+        endwin();
+        printf("\033[1;31m");
+        printf("$ Please provide a valid password\n");
+        printf("\033[0m");
+        exit(1);
+    }
+
+    authRequest(username, password);
+
+    return 0;
+}
 
 WINDOW *createWin(int height, int width, int starty, int startx)
 {
@@ -42,8 +149,6 @@ void displayIntro(WINDOW *intro_win)
     mvwprintw(intro_win, row / 2 + 1, (col - 30) / 2, "Press any key to continue.");
 
     wrefresh(intro_win);
-
-    // getch();
 }
 
 void displayHelp()
@@ -58,7 +163,7 @@ void displayHelp()
     mvwprintw(helpWindow, 1, 1, "/help : Display the list of commands");
     mvwprintw(helpWindow, 2, 1, "/quit : Quit the chatroom");
     mvwprintw(helpWindow, 3, 1, "/list : List all the users in the chatroom");
-    // Any key to leave
+
     mvwprintw(helpWindow, 4, 1, "Any key to continue");
     wrefresh(helpWindow);
 
@@ -83,13 +188,6 @@ char *writeMessage(WINDOW *input_win)
     clearMessage(input_win);
     return message;
 }
-
-// void printMessage(WINDOW *chat_win, char *message)
-// {
-//     mvwprintw(chat_win, messageCount, 1, message);
-//     wrefresh(chat_win);
-//     messageCount++;
-// }
 
 void printMessage(WINDOW *chatWindow, char *message)
 {
@@ -165,6 +263,11 @@ void sendMessage(int network_socket, char *message, WINDOW *chatWindow)
         box(chatWindow, 0, 0);
         wrefresh(chatWindow);
     }
+    else if (strcmp(message, "/quit") == 0)
+    {
+        endwin();
+        exit(0);
+    }
     else
     {
         if (send(network_socket, message, strlen(message), 0) < 0)
@@ -194,18 +297,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    struct arguments args;
-    args.targetIP = argv[1];
-    args.targetPORT = atoi(argv[2]);
-    args.username = argv[3];
-
-    int socketToConnect;
-    socketToConnect = createSocket(args.targetIP, args.targetPORT);
-
-    sendUsername(socketToConnect, args.username);
-
-    initscr(); // Start ncurses
-    // cbreak();  // Disable line buffering
+    initscr();
 
     int row, col;
     getmaxyx(stdscr, row, col);
@@ -214,9 +306,20 @@ int main(int argc, char *argv[])
     WINDOW *inputWindow = createWin(5, col, row - 5, 0);
     WINDOW *usernameWindow = createWin(1, col, row - 6, 0);
 
+    struct arguments args;
+    args.targetIP = argv[1];
+    args.targetPORT = atoi(argv[2]);
+    args.username = argv[3];
+
+    baserowAuthentication(row, col, args.username);
+
+    int socketToConnect;
+    socketToConnect = createSocket(args.targetIP, args.targetPORT);
+
+    sendUsername(socketToConnect, args.username);
+
     displayIntro(chatWindow);
 
-    // mvwprintw(inputWindow, 1, 1, "Enter message (/help) : ");
     wrefresh(inputWindow);
 
     fd_set readfds;
@@ -233,7 +336,6 @@ int main(int argc, char *argv[])
     mvwprintw(usernameWindow, 0, 1, "Username: %s", args.username);
     wrefresh(usernameWindow);
 
-    // pause();
     wgetch(chatWindow);
     wclear(chatWindow);
     box(chatWindow, 0, 0);

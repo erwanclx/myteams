@@ -5,7 +5,7 @@ OUT	= server client
 CC	 = gcc
 FLAGS	 = -g -c
 # -Wall: all warnings
-LFLAGS	 = -lncurses
+LFLAGS	 = -lncurses -lcurl
 
 # all: $(OBJS)
 # 	$(CC) -g $(OBJS) -o $(OUT) $(LFLAGS)
