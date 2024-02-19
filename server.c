@@ -8,22 +8,40 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <curl/curl.h>
 #define USERNAME_SIZE 20
 #define MAX_CLIENTS 50
-
-// int create_server_socket(int targetPORT);
-// void accept_new_connection(int listener_socket, fd_set *all_sockets, int *fd_max);
-// void read_data_from_socket(int socket, fd_set *all_sockets, int fd_max, int server_socket);
 
 typedef struct
 {
     int socket;
     char username[USERNAME_SIZE];
     int messages_sent;
+    int is_admin;
 
 } ClientInfo;
 
 ClientInfo clients[MAX_CLIENTS];
+
+char *get_username(int client_socket, char *username);
+
+char *find_string(char *buffer, char *key, int size)
+{
+    char *start = strstr(buffer, key);
+    start += strlen(key);
+    char *end = start;
+    while (*end != '\0' && *end != ',' && *end != '}')
+    {
+        end++;
+    }
+    char *result = (char *)malloc((end - start + 1) * sizeof(char));
+    if (result != NULL)
+    {
+        strncpy(result, start, end - start);
+        result[end - start] = '\0';
+    }
+    return result;
+}
 
 int is_client_registered(int client_socket)
 {
@@ -37,6 +55,71 @@ int is_client_registered(int client_socket)
     return 0;
 }
 
+char write_data(void *buffer, size_t size, size_t nmemb, void *userp)
+{
+
+    char *admin_str = find_string(buffer, "\"Admin\":", 6);
+    int is_admin = strcmp(admin_str, "true") == 0 ? 1 : 0;
+
+    char *username = find_string(buffer, "\"Username\":\"", USERNAME_SIZE);
+    username[strlen(username) - 1] = '\0';
+
+    for (int i = 0; i < MAX_CLIENTS; i++)
+    {
+        if (strcmp(clients[i].username, username) == 0)
+        {
+            clients[i].is_admin = is_admin;
+            printf("[DEBUG] Client %d is admin: %d\n", clients[i].socket, clients[i].is_admin);
+            break;
+        }
+    }
+
+    return size * nmemb;
+}
+
+int is_admin(int sender)
+{
+    CURL *curl;
+    CURLcode res;
+
+    curl_global_init(CURL_GLOBAL_ALL);
+
+    char *tmp = "";
+    char *username = get_username(sender, tmp);
+
+    curl = curl_easy_init();
+    if (curl)
+    {
+        struct curl_slist *headers = NULL;
+        headers = curl_slist_append(headers, "Authorization: Token q24qiZP0hexG2wlzkx3hl9THnS6MF6RD");
+
+        const char *basis_url = "https://api.baserow.io/api/database/rows/table/256115/?user_field_names=true&filters=";
+        char json_data[200];
+
+        snprintf(json_data, sizeof(json_data), "{\"filter_type\":\"AND\",\"filters\":[{\"type\":\"equal\",\"field\":\"Username\",\"value\":\"%s\"}],\"groups\":[]}", username);
+        char *url = malloc(strlen(basis_url) + strlen(json_data) + 1);
+        strcpy(url, basis_url);
+        strcat(url, json_data);
+
+        curl_easy_setopt(curl, CURLOPT_URL, url);
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_data);
+
+        res = curl_easy_perform(curl);
+        if (res != CURLE_OK)
+        {
+            fprintf(stderr, "curl_easy_perform() failed: %s\n",
+                    curl_easy_strerror(res));
+            printf("\033[1;31m");
+            printf("$ Authentification failed, error in the request. Insure you only give valid characters.\n");
+            printf("\033[0m");
+        }
+
+        curl_slist_free_all(headers);
+        curl_easy_cleanup(curl);
+    }
+}
+
 void register_client(int client_socket, char *username)
 {
     for (int i = 0; i < MAX_CLIENTS; i++)
@@ -47,6 +130,8 @@ void register_client(int client_socket, char *username)
             strcpy(clients[i].username, username);
             clients[i].messages_sent = 1;
             printf("[DEBUG] Client %d registered as %s with %d messages\n", clients[i].messages_sent, clients[i].username, clients[i].messages_sent);
+            printf("[DEBUG] Client %d is admin: %d\n", client_socket, clients[i].is_admin);
+            is_admin(client_socket);
             break;
         }
     }
@@ -60,6 +145,8 @@ void unregister_client(int client_socket)
         {
             clients[i].socket = 0;
             memset(clients[i].username, 0, sizeof(clients[i].username));
+            clients[i].messages_sent = 0;
+            clients[i].is_admin = 0;
             break;
         }
     }
@@ -78,6 +165,18 @@ char *get_username(int client_socket, char *username)
         }
     }
     return "Unknown";
+}
+
+int get_client_index(int client_socket)
+{
+    for (int i = 0; i < MAX_CLIENTS; i++)
+    {
+        if (clients[i].socket == client_socket)
+        {
+            return i;
+        }
+    }
+    return -1;
 }
 
 void banner(int targetPORT)
@@ -149,22 +248,96 @@ void send_to_all_clients(fd_set *all_sockets, int server_socket, int sender, cha
 {
     int status;
 
-    for (int i = 0; i <= FD_SETSIZE; i++)
+    printf("DEBUG ---- %s\n", msg);
+
+    if (strcmp(msg, "/list") == 0)
     {
-        if (FD_ISSET(i, all_sockets) && i != server_socket && i != sender)
+        char user_list[BUFSIZ];
+        memset(user_list, 0, BUFSIZ);
+
+        for (int i = 0; i < MAX_CLIENTS; i++)
         {
-            status = send(i, msg, strlen(msg), 0);
-            if (status == -1)
-                printf("\033[1;31m$ Send error to client %d: %s\n", i, strerror(errno));
+            if (clients[i].socket != 0)
+            {
+                strcat(user_list, clients[i].username);
+                strcat(user_list, " | ");
+            }
         }
 
-        else if (i == sender)
+        char final_list[BUFSIZ + 8];
+        snprintf(final_list, sizeof(final_list), "$ %s\n", user_list);
+        status = send(sender, final_list, strlen(final_list), 0);
+    }
+    else if (strcmp(msg, "/kick") == 0)
+    {
+        char kick_msg[50] = "$ Please provide a username to kick.";
+        status = send(sender, kick_msg, strlen(kick_msg), 0);
+    }
+    // If kick + username
+    else if (strncmp(msg, "/kick", 5) == 0)
+    {
+
+        // is_admin(sender);
+
+        int sender_index = get_client_index(sender);
+        int admin_status = clients[sender_index].is_admin;
+
+        char *username = msg + 6;
+        int found = 0;
+
+        if (admin_status == 1)
         {
-            char sender_msg[BUFSIZ + 8];
-            sprintf(sender_msg, "(You) %s", msg);
-            status = send(i, sender_msg, strlen(sender_msg), 0);
-            if (status == -1)
-                printf("\033[1;31m$ Send error to client %d: %s\n", i, strerror(errno));
+            for (int i = 0; i < MAX_CLIENTS; i++)
+            {
+                if (strcmp(clients[i].username, username) == 0)
+                {
+                    send(clients[i].socket, "$ You have been kicked.", 22, 0);
+                    send(clients[i].socket, "\n", 22, 0);
+                    close(clients[i].socket);
+                    FD_CLR(clients[i].socket, all_sockets);
+                    unregister_client(clients[i].socket);
+                    found = 1;
+                    status = send(sender, "$ User kicked.", 14, 0);
+                    break;
+                }
+            }
+            if (found == 0)
+            {
+                char kick_msg[50] = "$ User not found.";
+                status = send(sender, kick_msg, strlen(kick_msg), 0);
+            }
+        }
+        else
+        {
+            char kick_msg[50] = "$ You are not an admin.";
+            status = send(sender, kick_msg, strlen(kick_msg), 0);
+        }
+    }
+    else
+    {
+
+        char *username = get_username(sender, msg);
+
+        for (int i = 0; i <= FD_SETSIZE; i++)
+        {
+            if (FD_ISSET(i, all_sockets) && i != server_socket && i != sender)
+            {
+                char final_msg[BUFSIZ + 8];
+                sprintf(final_msg, "# %s >> %s", username, msg);
+                status = send(i, final_msg, strlen(final_msg), 0);
+                if (status == -1)
+                    printf("\033[1;31m$ Send error to client %d: %s\n", i, strerror(errno));
+            }
+
+            else if (i == sender)
+            {
+                char sender_msg[BUFSIZ + 8];
+                // sprintf(sender_msg, "(You) %s", msg);
+                sprintf(sender_msg, "# (You) %s >> %s", username, msg);
+                status = send(i, sender_msg, strlen(sender_msg), 0);
+                if (status == -1)
+                    printf("\033[1;31m$ Send error to client %d: %s\n", i, strerror(errno));
+            }
         }
     }
 }
@@ -182,7 +355,7 @@ void get_ip_address(int socket)
 void read_data_from_socket(int socket, fd_set *all_sockets, int fd_max, int server_socket)
 {
     char buffer[BUFSIZ];
-    char msg_to_send[BUFSIZ];
+    // char msg_to_send[BUFSIZ];
     int bytes_read;
     memset(&buffer, '\0', sizeof buffer);
     bytes_read = recv(socket, buffer, BUFSIZ, 0);
@@ -207,12 +380,13 @@ void read_data_from_socket(int socket, fd_set *all_sockets, int fd_max, int serv
         }
 
         get_ip_address(socket);
-        memset(&msg_to_send, '\0', sizeof msg_to_send);
+        // memset(&msg_to_send, '\0', sizeof msg_to_send);
 
-        char *username = get_username(socket, buffer);
+        // char *username = get_username(socket, buffer);
 
-        snprintf(msg_to_send, sizeof(msg_to_send) + sizeof(socket) + sizeof(username) + sizeof(buffer), "# %s >> %s", username, buffer);
-        send_to_all_clients(all_sockets, server_socket, socket, msg_to_send);
+        // snprintf(msg_to_send, sizeof(msg_to_send) + sizeof(socket) + sizeof(username) + sizeof(buffer), "# %s >> %s", username, buffer);
+        // send_to_all_clients(all_sockets, server_socket, socket, msg_to_send);
+        send_to_all_clients(all_sockets, server_socket, socket, buffer);
     }
 }
 
