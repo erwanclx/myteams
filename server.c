@@ -25,6 +25,7 @@ typedef struct
 ClientInfo clients[MAX_CLIENTS];
 
 char *get_username(int client_socket, char *username);
+void conversation_log(char *msg);
 
 char *find_string(char *buffer, char *key, int size)
 {
@@ -70,7 +71,7 @@ char write_data(void *buffer, size_t size, size_t nmemb, void *userp)
         if (strcmp(clients[i].username, username) == 0)
         {
             clients[i].is_admin = is_admin;
-            printf("[DEBUG] Client %d is admin: %d\n", clients[i].socket, clients[i].is_admin);
+            // printf("[DEBUG] Client %d is admin: %d\n", clients[i].socket, clients[i].is_admin);
             break;
         }
     }
@@ -130,8 +131,8 @@ void register_client(int client_socket, char *username)
             clients[i].socket = client_socket;
             strcpy(clients[i].username, username);
             clients[i].messages_sent = 1;
-            printf("[DEBUG] Client %d registered as %s with %d messages\n", clients[i].messages_sent, clients[i].username, clients[i].messages_sent);
-            printf("[DEBUG] Client %d is admin: %d\n", client_socket, clients[i].is_admin);
+            // printf("[DEBUG] Client %d registered as %s with %d messages\n", clients[i].messages_sent, clients[i].username, clients[i].messages_sent);
+            // printf("[DEBUG] Client %d is admin: %d\n", client_socket, clients[i].is_admin);
             is_admin(client_socket);
             break;
         }
@@ -249,8 +250,6 @@ void send_to_all_clients(fd_set *all_sockets, int server_socket, int sender, cha
 {
     int status;
 
-    printf("DEBUG ---- %s\n", msg);
-
     if (strcmp(msg, "/list") == 0)
     {
         char user_list[BUFSIZ];
@@ -323,6 +322,8 @@ void send_to_all_clients(fd_set *all_sockets, int server_socket, int sender, cha
                 char final_msg[BUFSIZ + 8];
                 sprintf(final_msg, "# %s >> %s", username, msg);
                 status = send(i, final_msg, strlen(final_msg), 0);
+                conversation_log(final_msg);
+
                 if (status == -1)
                     printf("\033[1;31m$ Send error to client %d: %s\n", i, strerror(errno));
             }
@@ -330,7 +331,6 @@ void send_to_all_clients(fd_set *all_sockets, int server_socket, int sender, cha
             else if (i == sender)
             {
                 char sender_msg[BUFSIZ + 8];
-                // sprintf(sender_msg, "(You) %s", msg);
                 sprintf(sender_msg, "# (You) %s >> %s", username, msg);
                 status = send(i, sender_msg, strlen(sender_msg), 0);
                 if (status == -1)
@@ -353,7 +353,6 @@ void get_ip_address(int socket)
 void read_data_from_socket(int socket, fd_set *all_sockets, int fd_max, int server_socket)
 {
     char buffer[BUFSIZ];
-    // char msg_to_send[BUFSIZ];
     int bytes_read;
     memset(&buffer, '\0', sizeof buffer);
     bytes_read = recv(socket, buffer, BUFSIZ, 0);
@@ -397,6 +396,21 @@ void sigint_handler(int sig)
     close(3);
 
     exit(0);
+}
+
+void conversation_log(char *msg)
+{
+    FILE *f = fopen("conversation_log.txt", "a");
+    if (f == NULL)
+    {
+        printf("Error opening file!\n");
+        exit(1);
+    }
+
+    time_t t = time(NULL);
+    struct tm tm = *localtime(&t);
+    fprintf(f, "[%d-%02d-%02d %02d:%02d:%02d] %s\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, msg);
+    fclose(f);
 }
 
 int main(int argc, char *argv[])
