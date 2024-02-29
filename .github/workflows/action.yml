@@ -2,9 +2,9 @@ name: MyTeams Make CI | Erwan
 
 on:
   push:
-    branches: ["erwan"]
+    branches: ["main"]
   pull_request:
-    branches: ["erwan"]
+    branches: ["main"]
 
 jobs:
   build:
