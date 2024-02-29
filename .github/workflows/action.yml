@@ -1,4 +1,4 @@
-name: MyTeams Make CI | Erwan
+name: MyTeams Make CI | Main
 
 on:
   push:
