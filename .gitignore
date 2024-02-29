@@ -1,0 +1,6 @@
+server
+server.o
+client
+client.o
+.vscode
+conversation_log.txt
