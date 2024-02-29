@@ -1,6 +1,6 @@
 # MyTeams - Dev
 
-[![MyTeams Make CI](https://github.com/erwanclx/myteams/actions/workflows/action.yml/badge.svg?branch=erwan)](https://github.com/erwanclx/myteams/actions/workflows/action.yml)
+[![MyTeams Make CI](https://github.com/erwanclx/myteams/actions/workflows/action.yml/badge.svg?branch=main)](https://github.com/erwanclx/myteams/actions/workflows/action.yml)
 
 ## Description
 MyTeams is a simple chat application that allows users to exchange messages in real time in C.
