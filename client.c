@@ -156,15 +156,17 @@ void displayHelp()
 
     int row, col;
     getmaxyx(stdscr, row, col);
-    WINDOW *helpWindow = newwin(5, 50, (row - 5) / 2, (col - 50) / 2);
+    WINDOW *helpWindow = newwin(6, 50, (row - 5) / 2, (col - 50) / 2);
     box(helpWindow, 0, 0);
     wrefresh(helpWindow);
 
+    mvwprintw(helpWindow, 0, 1, "Commands :");
     mvwprintw(helpWindow, 1, 1, "/help : Display the list of commands");
     mvwprintw(helpWindow, 2, 1, "/quit : Quit the chatroom");
     mvwprintw(helpWindow, 3, 1, "/list : List all the users in the chatroom");
+    mvwprintw(helpWindow, 4, 1, "/kick : Kick user (need Admin rights)");
 
-    mvwprintw(helpWindow, 4, 1, "Any key to continue");
+    mvwprintw(helpWindow, 5, 1, "Any key to continue");
     wrefresh(helpWindow);
 
     wgetch(helpWindow);

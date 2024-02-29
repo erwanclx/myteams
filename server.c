@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <curl/curl.h>
+#include <signal.h>
 #define USERNAME_SIZE 20
 #define MAX_CLIENTS 50
 
@@ -273,11 +274,8 @@ void send_to_all_clients(fd_set *all_sockets, int server_socket, int sender, cha
         char kick_msg[50] = "$ Please provide a username to kick.";
         status = send(sender, kick_msg, strlen(kick_msg), 0);
     }
-    // If kick + username
     else if (strncmp(msg, "/kick", 5) == 0)
     {
-
-        // is_admin(sender);
 
         int sender_index = get_client_index(sender);
         int admin_status = clients[sender_index].is_admin;
@@ -380,14 +378,25 @@ void read_data_from_socket(int socket, fd_set *all_sockets, int fd_max, int serv
         }
 
         get_ip_address(socket);
-        // memset(&msg_to_send, '\0', sizeof msg_to_send);
-
-        // char *username = get_username(socket, buffer);
-
-        // snprintf(msg_to_send, sizeof(msg_to_send) + sizeof(socket) + sizeof(username) + sizeof(buffer), "# %s >> %s", username, buffer);
-        // send_to_all_clients(all_sockets, server_socket, socket, msg_to_send);
         send_to_all_clients(all_sockets, server_socket, socket, buffer);
     }
+}
+
+void sigint_handler(int sig)
+{
+    printf("\033[1;31m$ Server shutting down...\n");
+    for (int i = 0; i < MAX_CLIENTS; i++)
+    {
+        if (clients[i].socket != 0)
+        {
+            close(clients[i].socket);
+            unregister_client(clients[i].socket);
+        }
+    }
+
+    close(3);
+
+    exit(0);
 }
 
 int main(int argc, char *argv[])
@@ -428,6 +437,8 @@ int main(int argc, char *argv[])
 
     banner(port);
 
+    signal(SIGINT, sigint_handler);
+
     while (1)
     {
         read_fds = all_sockets;
@@ -444,7 +455,6 @@ int main(int argc, char *argv[])
         else if (status == 0)
         {
             printf("$ Waiting...\n");
-            // Print all clients
             for (int i = 0; i < MAX_CLIENTS; i++)
             {
                 if (clients[i].socket != 0)
